@@ -7,7 +7,7 @@ PROJECT_NAME=$(grep 'name:' "${GF_CONFIG}" 2>/dev/null | head -1 \
   | sed 's/.*name:[[:space:]]*//' | tr -d '"' | tr -d "'")
 
 # Check if observability is enabled
-OBS_ENABLED=$(awk '/^  observability:/,/^  [a-z]/{if(/enabled:.*true/)print "yes"}' "${GF_CONFIG}" 2>/dev/null)
+OBS_ENABLED=$(grep -A5 '^ *observability:' "${GF_CONFIG}" 2>/dev/null | grep -q 'enabled:.*true' && echo "yes" || true)
 if [ "${OBS_ENABLED}" != "yes" ]; then
   skip "observability stack not enabled"
   return 0 2>/dev/null || exit 0
@@ -33,8 +33,8 @@ if [ -n "${PROJECT_NAME}" ]; then
   PROM_RESULT=$(${K} exec -n "${MONITORING_NS}" deploy/grafana -- \
     curl -sG "http://prometheus-server/api/v1/query" \
     --data-urlencode "query=up{job=\"${PROJECT_NAME}\"}" 2>/dev/null | \
-    grep -c '"result":\[{' 2>/dev/null || echo "0")
-  if [ "${PROM_RESULT}" -gt 0 ]; then
+    grep -q '"result":\[{' 2>/dev/null && echo "found" || echo "empty")
+  if [ "${PROM_RESULT}" = "found" ]; then
     pass "app metrics found in prometheus (job=${PROJECT_NAME})"
   else
     skip "no app metrics in prometheus yet (job=${PROJECT_NAME}) — deploy the app first"
@@ -50,16 +50,17 @@ else
   fail "loki is not running (status: ${LOKI_READY:-not found})"
 fi
 
-# Query Loki for app logs
+# Query Loki for app logs (use query_range — instant queries don't work for logs)
 if [ -n "${PROJECT_NAME}" ]; then
   LOKI_RESULT=$(${K} exec -n "${MONITORING_NS}" deploy/grafana -- \
-    curl -sG "http://loki:3100/loki/api/v1/query" \
-    --data-urlencode "query={app=\"${PROJECT_NAME}\"}" 2>/dev/null | \
-    grep -c '"result":\[{' 2>/dev/null || echo "0")
-  if [ "${LOKI_RESULT}" -gt 0 ]; then
-    pass "app logs found in loki (app=${PROJECT_NAME})"
+    curl -sG "http://loki:3100/loki/api/v1/query_range" \
+    --data-urlencode "query={namespace=\"${PROJECT_NAME}\"}" \
+    --data-urlencode "limit=1" 2>/dev/null | \
+    grep -q '"values"' 2>/dev/null && echo "found" || echo "empty")
+  if [ "${LOKI_RESULT}" = "found" ]; then
+    pass "app logs found in loki (namespace=${PROJECT_NAME})"
   else
-    skip "no app logs in loki yet (app=${PROJECT_NAME}) — deploy the app first"
+    skip "no app logs in loki yet (namespace=${PROJECT_NAME}) — deploy the app first"
   fi
 fi
 
@@ -76,8 +77,8 @@ fi
 if [ -n "${PROJECT_NAME}" ]; then
   TEMPO_RESULT=$(${K} exec -n "${MONITORING_NS}" deploy/grafana -- \
     curl -s "http://tempo:3100/api/search?tags=service.name%3D${PROJECT_NAME}" 2>/dev/null | \
-    grep -c '"traceID"' 2>/dev/null || echo "0")
-  if [ "${TEMPO_RESULT}" -gt 0 ]; then
+    grep -q '"traceID"' 2>/dev/null && echo "found" || echo "empty")
+  if [ "${TEMPO_RESULT}" = "found" ]; then
     pass "traces found in tempo (service.name=${PROJECT_NAME})"
   else
     skip "no traces in tempo yet (service.name=${PROJECT_NAME}) — send some requests first"

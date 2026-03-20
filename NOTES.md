@@ -78,11 +78,35 @@ Same root cause as Bug 1. `grep 'port:' | tail -1` matched the last `port:` line
 the file which was `app.port`, not `stacks.registry.port`. Fixed: use awk range pattern
 scoped to the `registry:` section.
 
+### Bug 5: duplicate prometheus scrape job name
+The prometheus helm chart ships a built-in `kubernetes-pods` scrape job. Our
+`extraScrapeConfigs` also used the name `kubernetes-pods`, causing a config parse
+error on startup. Fixed: renamed to `golden-fleece-pods`.
+
+### Bug 6: ((PASSED++)) kills script when PASSED=0
+With `set -e`, `((PASSED++))` returns exit code 1 when PASSED is 0 (because `((0))`
+is falsy in bash arithmetic). The smoke test runner dies on the first `pass` call.
+Fixed: use `PASSED=$((PASSED + 1))` instead.
+
+### Bug 7: awk range matches start line as end line
+The awk pattern `/^  registry:/,/^  [a-z]/` — both patterns match the same line
+(`  registry:` starts with two spaces + lowercase letter). The range is one line.
+All smoke checks and Makefile stack detection were affected. Fixed: replaced with
+`grep -A5 'section:' | grep -q 'enabled:.*true'` which is simpler and portable.
+
+### Bug 8: grep -c returns multiline output from kubectl exec
+`kubectl exec ... | grep -c` can produce `0\n0` (two zeros on separate lines) when
+stderr from kubectl leaks into the pipe. `[ "0\n0" -gt 0 ]` fails with "integer
+expression expected". Fixed: use `grep -q` with `&& echo found || echo empty`.
+
+### Loki instant query doesn't work for logs
+The DESIGN.md shows `curl loki:3100/loki/api/v1/query` for log queries, but Loki
+rejects instant queries for log data. Must use `query_range` endpoint.
+
 ### Root cause
-All four bugs stem from the same issue: flat `grep` against a nested YAML file. The
-config has multiple `port:`, `name:`, etc. keys at different nesting levels. The fix
-pattern is always the same: use `awk '/^  section:/,/^  [a-z]/'` to scope the search
-to the correct YAML section before extracting the value.
+Most config-parsing bugs stem from flat `grep` against nested YAML. The config has
+multiple `port:`, `name:`, etc. keys at different nesting levels. The fix pattern is
+`grep -A<N> 'section:'` to scope to the right section before extracting.
 
 ## Not yet built
 

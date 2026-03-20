@@ -39,7 +39,7 @@ prometheus-pushgateway:
 # Annotation-based pod scraping — any pod with prometheus.io/scrape: "true"
 # gets scraped automatically. App Helm charts should set this annotation.
 extraScrapeConfigs: |
-  - job_name: 'kubernetes-pods'
+  - job_name: 'golden-fleece-pods'
     kubernetes_sd_configs:
       - role: pod
     relabel_configs:

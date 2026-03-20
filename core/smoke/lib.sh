@@ -19,9 +19,9 @@ green() { printf "\033[32m%s\033[0m\n" "$*"; }
 yellow(){ printf "\033[33m%s\033[0m\n" "$*"; }
 blue()  { printf "\033[34m%s\033[0m\n" "$*"; }
 
-pass() { green "  PASS: $1"; ((PASSED++)); }
-fail() { red   "  FAIL: $1"; ((FAILED++)); }
-skip() { yellow "  SKIP: $1"; ((SKIPPED++)); }
+pass() { green "  PASS: $1"; PASSED=$((PASSED + 1)); }
+fail() { red   "  FAIL: $1"; FAILED=$((FAILED + 1)); }
+skip() { yellow "  SKIP: $1"; SKIPPED=$((SKIPPED + 1)); }
 
 # Export for use by check scripts
 export GF_DIR GF_CONFIG GF_CONTEXT GF_CLUSTER_NAME GF_TARGET_TYPE K H

@@ -2,7 +2,7 @@
 # Smoke check: verify registry is reachable and functional
 
 # Check if registry is enabled
-REG_ENABLED=$(awk '/^  registry:/,/^  [a-z]/{if(/enabled:.*true/)print "yes"}' "${GF_CONFIG}" 2>/dev/null)
+REG_ENABLED=$(grep -A5 '^ *registry:' "${GF_CONFIG}" 2>/dev/null | grep -q 'enabled:.*true' && echo "yes" || true)
 if [ "${REG_ENABLED}" != "yes" ]; then
   skip "registry not enabled"
   return 0 2>/dev/null || exit 0

@@ -2,7 +2,7 @@
 # Smoke check: verify ArgoCD is running and app is synced (if Application exists)
 
 # Check if gitops is enabled
-GITOPS_ENABLED=$(awk '/^  gitops:/,/^  [a-z]/{if(/enabled:.*true/)print "yes"}' "${GF_CONFIG}" 2>/dev/null)
+GITOPS_ENABLED=$(grep -A5 '^ *gitops:' "${GF_CONFIG}" 2>/dev/null | grep -q 'enabled:.*true' && echo "yes" || true)
 if [ "${GITOPS_ENABLED}" != "yes" ]; then
   skip "gitops not enabled"
   return 0 2>/dev/null || exit 0

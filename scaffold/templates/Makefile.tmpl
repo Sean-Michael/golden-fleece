@@ -53,9 +53,9 @@ destroy:
 kind-up: registry
 	GF_CONFIG=$(GF_CONFIG) bash $(GF_DIR)/core/targets/kind/bootstrap.sh
 	@# Install enabled stacks based on golden-fleece.yaml
-	@awk '/^  observability:/,/^  [a-z]/{if(/enabled:.*true/)exit 0}END{exit 1}' $(GF_CONFIG) 2>/dev/null && \
+	@grep -A5 'observability:' $(GF_CONFIG) 2>/dev/null | grep -q 'enabled:.*true' && \
 		GF_CONFIG=$(GF_CONFIG) bash $(GF_DIR)/core/stacks/observability/lgtm/install.sh || true
-	@awk '/^  gitops:/,/^  [a-z]/{if(/enabled:.*true/)exit 0}END{exit 1}' $(GF_CONFIG) 2>/dev/null && \
+	@grep -A5 'gitops:' $(GF_CONFIG) 2>/dev/null | grep -q 'enabled:.*true' && \
 		GF_CONFIG=$(GF_CONFIG) bash $(GF_DIR)/core/stacks/gitops/argocd/install.sh || true
 	@grep -qE 'argo-workflows:\s*true' $(GF_CONFIG) 2>/dev/null && \
 		GF_CONFIG=$(GF_CONFIG) bash $(GF_DIR)/core/stacks/argo-workflows/install.sh || true
