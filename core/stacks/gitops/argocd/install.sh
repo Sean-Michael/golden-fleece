@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # golden-fleece/core/stacks/gitops/argocd/install.sh
 # Installs ArgoCD into the cluster and exposes the UI via NodePort.
+# Creates the ArgoCD Application only if a git remote is available.
 # Idempotent — safe to re-run.
 # Usage: GF_CONFIG=golden-fleece.yaml bash golden-fleece/core/stacks/gitops/argocd/install.sh
 set -euo pipefail
@@ -48,7 +49,6 @@ ${K} -n "${ARGOCD_NS}" patch svc argocd-server --type=json \
   ]"
 
 # ── Disable TLS on argocd-server for local dev ────────────────────
-# This makes the UI accessible without TLS warnings on localhost
 ${K} -n "${ARGOCD_NS}" patch deployment argocd-server --type=json \
   -p='[{"op":"add","path":"/spec/template/spec/containers/0/args/-","value":"--insecure"}]' \
   2>/dev/null || true
@@ -76,41 +76,28 @@ spec:
       kind: Namespace
 EOF
 
-# ── Create ArgoCD Application ─────────────────────────────────────
-echo "==> Creating ArgoCD application '${PROJECT_NAME}'..."
-TEMPLATE_FILE="${GF_DIR}/core/stacks/gitops/argocd/application.yaml.tmpl"
-if [ -f "${TEMPLATE_FILE}" ]; then
+# ── Detect git remote for Application creation ────────────────────
+REPO_URL=$(git remote get-url origin 2>/dev/null || true)
+
+if [ -n "${REPO_URL}" ]; then
+  echo "==> Git remote detected: ${REPO_URL}"
+  echo "==> Creating ArgoCD application '${PROJECT_NAME}'..."
+  TEMPLATE_FILE="${GF_DIR}/core/stacks/gitops/argocd/application.yaml.tmpl"
   sed \
     -e "s|{{PROJECT_NAME}}|${PROJECT_NAME}|g" \
     -e "s|{{PROJECT_NS}}|${PROJECT_NS}|g" \
     -e "s|{{CHART_DIR}}|${CHART_DIR}|g" \
     -e "s|{{ARGOCD_NS}}|${ARGOCD_NS}|g" \
+    -e "s|{{REPO_URL}}|${REPO_URL}|g" \
     "${TEMPLATE_FILE}" | ${K} apply -f -
+  ARGOCD_APP_STATUS="created (syncing from ${REPO_URL})"
 else
-  # Inline fallback if template doesn't exist
-  ${K} apply -f - <<EOF
-apiVersion: argoproj.io/v1alpha1
-kind: Application
-metadata:
-  name: ${PROJECT_NAME}
-  namespace: ${ARGOCD_NS}
-spec:
-  project: ${PROJECT_NAME}
-  source:
-    repoURL: https://kubernetes.default.svc
-    targetRevision: HEAD
-    path: ${CHART_DIR}
-    helm:
-      valueFiles:
-        - values-dev.yaml
-  destination:
-    server: https://kubernetes.default.svc
-    namespace: ${PROJECT_NS}
-  syncPolicy:
-    automated:
-      prune: true
-      selfHeal: true
-EOF
+  echo ""
+  echo "    No git remote found — skipping ArgoCD Application creation."
+  echo "    ArgoCD is installed and the project is configured."
+  echo "    Use 'helm install' for local iteration."
+  echo "    When you push to a remote, re-run this script to create the Application."
+  ARGOCD_APP_STATUS="not created (no git remote — use helm install for local dev)"
 fi
 
 # ── Get initial admin password ────────────────────────────────────
@@ -126,10 +113,9 @@ echo "  UI:       https://localhost:${ARGOCD_NODEPORT}"
 echo "  Login:    admin / ${ADMIN_PASS}"
 echo ""
 echo "  Project:  ${PROJECT_NAME} (scoped to namespace ${PROJECT_NS})"
-echo "  App:      ${PROJECT_NAME} (auto-sync enabled)"
+echo "  App:      ${ARGOCD_APP_STATUS}"
 echo ""
 echo "  CLI:"
 echo "    argocd login localhost:${ARGOCD_NODEPORT} --insecure --username admin --password '${ADMIN_PASS}'"
 echo "    argocd app get ${PROJECT_NAME}"
-echo "    argocd app sync ${PROJECT_NAME}"
 echo ""

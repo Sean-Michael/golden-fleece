@@ -113,9 +113,17 @@ Iterate until pod is `1/1 Running`.
 Validate each signal with live queries (see Observability Validation below).
 If OTLP isn't wired, add the SDK, rebuild, redeploy, re-query.
 
-### Phase 7: GitOps Deploy
-Create ArgoCD Application and sync:
+### Phase 7: GitOps Validation
+ArgoCD is installed but the Application is only created when a git remote
+exists (`git remote get-url origin`). For local dev without a remote:
+- Phase 5 already deployed via `helm install` — the app is running.
+- ArgoCD validates the chart is GitOps-compatible (project + RBAC exist).
+- Skip the sync step; note in the readiness report that ArgoCD sync is
+  pending a real git remote.
+
+If a git remote IS available:
 ```bash
+argocd app get <project>
 argocd app sync <project>
 argocd app wait <project> --health --timeout 120
 ```

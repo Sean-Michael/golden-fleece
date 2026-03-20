@@ -45,11 +45,8 @@ down: app-stop kind-down
 	@echo "Dev harness is down"
 
 destroy:
-	$(MAKE) down
-	@if kind get clusters 2>/dev/null | grep -qw $(KIND_CLUSTER); then \
-		kind delete cluster --name $(KIND_CLUSTER); \
-		echo "Cluster deleted"; \
-	fi
+	$(MAKE) app-stop
+	GF_CONFIG=$(GF_CONFIG) bash $(GF_DIR)/core/targets/kind/teardown.sh
 
 # ── Cluster ────────────────────────────────────────────────────────
 

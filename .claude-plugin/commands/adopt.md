@@ -17,7 +17,7 @@ Execute all 10 phases of the adopt flow in order:
 4. **Cluster + Stacks** — `make kind-up` (bootstrap + stacks)
 5. **First Deploy** — `make image && make helm-install`, iterate until healthy
 6. **Observability Validation** — Live Prometheus/Loki/Tempo queries
-7. **GitOps Deploy** — ArgoCD sync (if enabled)
+7. **GitOps Validation** — ArgoCD sync if git remote exists, otherwise note pending
 8. **Smoke Test** — `make smoke`
 9. **Readiness Report** — Generate `k8s-readiness.md`
 
@@ -38,6 +38,6 @@ You are done when:
 - Metrics visible in Prometheus (live query)
 - Logs visible in Loki (live query)
 - Traces visible in Tempo (live query) — if OTLP instrumented
-- ArgoCD app is Healthy + Synced (if enabled)
+- ArgoCD app is Healthy + Synced (if git remote available), or noted as pending
 - `make smoke` passes
 - `k8s-readiness.md` is generated with observed values
