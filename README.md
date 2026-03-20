@@ -1,4 +1,4 @@
-# Golden Fleece 🏺
+# Golden Fleece
 
 > Skills and sandbox harness that turns Claude Code into a CKA — bridging the
 > gap between a containerized app and a production-ready Kubernetes application.
@@ -51,7 +51,7 @@ claude --dangerously-skip-permissions
 Enable stacks in `golden-fleece.yaml`:
 
 | Stack | What it gives you |
-|---|---|
+| --- | --- |
 | `argo-workflows` | Workflow execution engine, UI at localhost:2746 |
 | `argocd` | GitOps CD, ApplicationSet support |
 | `lgtm` | Loki + Grafana + Tempo + Mimir + Alloy (full observability) |
@@ -72,7 +72,7 @@ clauses that abort if the context server URL looks like a cloud endpoint.
 
 ## Project Structure
 
-```
+```bash
 golden-fleece/
   core/
     cluster/          # KIND cluster bootstrap (template + script)
@@ -96,7 +96,7 @@ golden-fleece/
 
 ## The Development Loop
 
-```
+```txt
 Edit code → verify app health → make image → make helm-install → observe pods → make smoke → repeat
 ```
 
