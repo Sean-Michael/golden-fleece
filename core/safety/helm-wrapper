@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+# golden-fleece/core/safety/helm-wrapper
+# Drop this on PATH as 'helm' in a golden-fleece dev session.
+# Enforces that ALL helm calls target the project's cluster context.
+
+GF_CONFIG="${GF_CONFIG:-${PWD}/golden-fleece.yaml}"
+
+# Parse context from config (same logic as kubectl-wrapper)
+_gf_cluster_name() {
+  local name
+  name=$(grep 'cluster_name:' "${GF_CONFIG}" 2>/dev/null | head -1 \
+    | sed 's/.*cluster_name:[[:space:]]*//' | tr -d '"' | tr -d "'")
+  if [ -z "${name}" ]; then
+    name=$(grep -A1 'cluster:' "${GF_CONFIG}" 2>/dev/null | grep 'name:' | head -1 \
+      | sed "s/.*name:[[:space:]]*//" | tr -d '"')
+  fi
+  echo "${name}"
+}
+
+_gf_target_type() {
+  local t
+  t=$(grep -A1 '^target:' "${GF_CONFIG}" 2>/dev/null | grep 'type:' | head -1 \
+    | sed 's/.*type:[[:space:]]*//' | tr -d '"' | tr -d "'")
+  echo "${t:-kind}"
+}
+
+GF_CLUSTER_NAME=$(_gf_cluster_name)
+GF_TARGET_TYPE=$(_gf_target_type)
+
+case "${GF_TARGET_TYPE}" in
+  kind)     GF_CONTEXT="kind-${GF_CLUSTER_NAME}" ;;
+  k3d)      GF_CONTEXT="k3d-${GF_CLUSTER_NAME}" ;;
+  existing)
+    GF_CONTEXT=$(grep -A5 '^target:' "${GF_CONFIG}" 2>/dev/null | grep 'context:' | head -1 \
+      | sed 's/.*context:[[:space:]]*//' | tr -d '"' | tr -d "'")
+    GF_CONTEXT="${GF_CONTEXT:-${GF_CLUSTER_NAME}}"
+    ;;
+  *)        GF_CONTEXT="kind-${GF_CLUSTER_NAME}" ;;
+esac
+
+# If --kube-context is explicitly passed, enforce it matches
+for arg in "$@"; do
+  if [[ "${arg}" == --kube-context=* ]]; then
+    passed="${arg#--kube-context=}"
+    if [[ "${passed}" != "${GF_CONTEXT}" ]]; then
+      echo "BLOCKED: helm --kube-context ${passed} is not allowed in a golden-fleece session." >&2
+      echo "         Only context '${GF_CONTEXT}' is permitted." >&2
+      exit 1
+    fi
+  fi
+done
+
+# Inject --kube-context automatically
+exec /usr/local/bin/helm --kube-context "${GF_CONTEXT}" "$@"
