@@ -14,36 +14,68 @@ echo "    Cluster: ${GF_CLUSTER_NAME}"
 echo "    Context: ${GF_KIND_CONTEXT}"
 echo "    Config:  ${GF_CONFIG}"
 
-# ── Generate kind-config.yaml from template + golden-fleece.yaml ───
+# ── Generate kind-config.yaml from golden-fleece.yaml ─────────────
 
 GENERATED_CONFIG="${PWD}/.golden-fleece/kind-config.yaml"
 mkdir -p "$(dirname "${GENERATED_CONFIG}")"
 
-# Build port mappings block from golden-fleece.yaml
-PORT_MAPPINGS=""
+# Use python3 to parse the ports section and generate valid Kind config YAML
+python3 - "${GF_CONFIG}" "${GF_CLUSTER_NAME}" "${GENERATED_CONFIG}" <<'PYEOF'
+import sys, re, os
 
-# Always add Argo Workflows port if stack is enabled
-ARGO_ENABLED=$(grep -A5 'stacks:' "${GF_CONFIG}" | grep 'argo-workflows:' | grep -c 'true' || true)
-if [ "${ARGO_ENABLED}" -gt 0 ]; then
-  PORT_MAPPINGS+="      - containerPort: 30746\n        hostPort: 2746\n        protocol: TCP\n"
-fi
+config_path, cluster_name, output_path = sys.argv[1], sys.argv[2], sys.argv[3]
+config = open(config_path).read()
 
-# Add project-defined ports
-while IFS= read -r line; do
-  PORT_MAPPINGS+="      ${line}\n"
-done < <(python3 -c "
-import sys, re
-config = open('${GF_CONFIG}').read()
-ports_section = re.search(r'ports:(.*?)(?=\n\S|\Z)', config, re.DOTALL)
-if ports_section:
-    print(ports_section.group(1).strip())
-" 2>/dev/null || true)
+# Parse port mappings from target.ports
+port_lines = []
 
-# Render template
-sed \
-  -e "s/{{GF_CLUSTER_NAME}}/${GF_CLUSTER_NAME}/g" \
-  -e "s/{{GF_PORT_MAPPINGS}}/${PORT_MAPPINGS}/g" \
-  "${GF_DIR}/core/targets/kind/kind-config.yaml.tmpl" > "${GENERATED_CONFIG}"
+# Check for argo-workflows
+if re.search(r'argo-workflows:\s*true', config):
+    port_lines.append("      - containerPort: 30746")
+    port_lines.append("        hostPort: 2746")
+    port_lines.append("        protocol: TCP")
+
+# Parse target.ports section
+ports_match = re.search(r'^  ports:\s*\n((?:\s+-.*\n|\s+\w+.*\n)*)', config, re.MULTILINE)
+if ports_match:
+    ports_block = ports_match.group(1)
+    # Find all port mapping entries
+    entries = re.findall(
+        r'-\s*containerPort:\s*(\d+)\s*\n\s*hostPort:\s*(\d+)(?:\s*\n\s*protocol:\s*(\w+))?',
+        ports_block
+    )
+    for container_port, host_port, protocol in entries:
+        protocol = protocol or "TCP"
+        port_lines.append(f"      - containerPort: {container_port}")
+        port_lines.append(f"        hostPort: {host_port}")
+        port_lines.append(f"        protocol: {protocol}")
+
+port_block = "\n".join(port_lines) if port_lines else "      []"
+
+kind_config = f"""kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: {cluster_name}
+containerdConfigPatches:
+  - |-
+    [plugins."io.containerd.grpc.v1.cri".registry]
+      config_path = "/etc/containerd/certs.d"
+nodes:
+  - role: control-plane
+    kubeadmConfigPatches:
+      - |
+        kind: InitConfiguration
+        nodeRegistration:
+          kubeletExtraArgs:
+            node-labels: "ingress-ready=true"
+    extraPortMappings:
+{port_block}
+"""
+
+with open(output_path, 'w') as f:
+    f.write(kind_config)
+PYEOF
+
+echo "    Generated: ${GENERATED_CONFIG}"
 
 # ── Create cluster if needed ────────────────────────────────────────
 
@@ -52,9 +84,9 @@ if kind get clusters 2>/dev/null | grep -qw "${GF_CLUSTER_NAME}"; then
 else
   echo "==> Creating Kind cluster '${GF_CLUSTER_NAME}'..."
   kind create cluster --config "${GENERATED_CONFIG}"
-  echo "✓ Cluster created"
+  echo "    Cluster created"
 fi
 
 gf_reject_cloud_context
 
-echo "✓ Cluster '${GF_CLUSTER_NAME}' is ready (context: ${GF_KIND_CONTEXT})"
+echo "==> Cluster '${GF_CLUSTER_NAME}' is ready (context: ${GF_KIND_CONTEXT})"

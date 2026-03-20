@@ -1,0 +1,31 @@
+image:
+  repository: "hello-fastapi-dev-registry:5000/hello-fastapi"
+  tag: "dev"
+  pullPolicy: Always          # always pull — image:dev gets overwritten
+
+app:
+  replicaCount: 1
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi
+
+autoscaling:
+  enabled: false              # not needed locally
+
+podDisruptionBudget:
+  enabled: false
+
+observability:
+  enabled: true
+  otlpEndpoint: "http://alloy.monitoring.svc.cluster.local:4318"
+
+ingress:
+  enabled: false              # use NodePort for local access
+
+networkPolicy:
+  enabled: false              # relaxed for local dev

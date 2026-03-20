@@ -17,11 +17,6 @@ Using `awk` range patterns to parse YAML sections portably
 (works on macOS BSD awk and GNU awk). Example:
 `awk '/^  observability:/,/^  [a-z]/{if(/enabled:.*true/)exit 0}END{exit 1}'`
 
-### Registry port parsing
-The `setup.sh` parser greps for `port:` lines which is fragile with the deeper nesting.
-Currently works because the registry port line is the most specific match, but this
-should be made more robust in a future pass.
-
 ## Phase B decisions
 
 ### Alert rules are generic
@@ -55,21 +50,41 @@ raw instead of rendering through `sed`. Only `Chart.yaml`, `values.yaml`, and
 The deployment template mounts an emptyDir at `/tmp` because `readOnlyRootFilesystem: true`
 prevents writes. Many frameworks (Python, Java) write temp files there.
 
-## Phase F decisions
+### ArgoCD local dev strategy
+`install.sh` auto-detects `git remote get-url origin`. Application is only created when a
+real remote URL exists. For local dev without a remote, ArgoCD installs (validating GitOps
+readiness) but deploys happen via `helm install`.
 
-### ArgoCD local repo source
-The application.yaml.tmpl uses `https://kubernetes.default.svc` as repoURL which is a
-placeholder. For local Kind dev, ArgoCD needs the repo-server to mount the project
-directory or use a Git init container. The `/fleece:adopt` flow (Phase 7) should handle
-this wiring dynamically based on whether there's a remote Git URL available.
+## E2E test findings (hello-fastapi, 2026-03-20)
+
+### Bug 1: `_get port` matches wrong port in new-project.sh
+The `_get` function does `grep "${1}:" config | head -1` which matched `port: 5050`
+(registry port) instead of `port: 8000` (app port) because registry comes first in the
+file. Fixed: parse `app.port` using an awk range pattern scoped to the `app:` section.
+
+### Bug 2: `_get test_cmd` kills script on missing key
+With `set -euo pipefail`, `grep` exits 1 when no line matches. `_get test_cmd` on a
+config without `test_cmd:` kills the whole script silently. Fixed: added `|| true` to
+the `_get` function and `2>/dev/null` to the inner grep.
+
+### Bug 3: kind-config.yaml port mappings malformed
+The sed-based template rendering for port mappings produced broken YAML — `\n` in sed
+replacement strings doesn't work as expected on macOS, and the python3 extraction
+preserved wrong indentation. Fixed: rewrote bootstrap.sh to generate the entire Kind
+config in a heredoc python3 script that outputs valid YAML directly.
+
+### Bug 4: setup.sh registry port matches app port
+Same root cause as Bug 1. `grep 'port:' | tail -1` matched the last `port:` line in
+the file which was `app.port`, not `stacks.registry.port`. Fixed: use awk range pattern
+scoped to the `registry:` section.
+
+### Root cause
+All four bugs stem from the same issue: flat `grep` against a nested YAML file. The
+config has multiple `port:`, `name:`, etc. keys at different nesting levels. The fix
+pattern is always the same: use `awk '/^  section:/,/^  [a-z]/'` to scope the search
+to the correct YAML section before extracting the value.
 
 ## Not yet built
 
-These items from DESIGN.md are not implemented yet:
 - `core/targets/k3d/` — k3d target driver (bootstrap + teardown)
 - `core/targets/existing/connect.sh` — existing cluster connector
-- `core/stacks/registry/external/connect.sh` — external registry connector
-- `core/stacks/observability/external/connect.sh` — external observability connector
-- `core/stacks/gitops/external/connect.sh` — external ArgoCD connector
-- `core/targets/kind/teardown.sh` — Kind cluster teardown (currently in Makefile)
-- `docs/` — reference documentation

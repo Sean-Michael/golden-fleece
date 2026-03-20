@@ -24,7 +24,7 @@ fi
 # ── Parse config values ─────────────────────────────────────────────
 
 _get() {
-  grep "${1}:" "${GF_CONFIG}" | head -1 | sed "s/.*${1}:[[:space:]]*//" | tr -d '"' | tr -d "'"
+  grep "${1}:" "${GF_CONFIG}" 2>/dev/null | head -1 | sed "s/.*${1}:[[:space:]]*//" | tr -d '"' | tr -d "'" || true
 }
 
 PROJECT_NAME=$(_get name)
@@ -45,12 +45,15 @@ REGISTRY_PORT="${REGISTRY_PORT:-5050}"
 
 APP_START_CMD=$(_get start_cmd)
 APP_HEALTH_URL=$(_get health_url)
-APP_PORT=$(_get port)
+# Parse app.port specifically from the app: section (not stacks.registry.port)
+APP_PORT=$(awk '/^app:/,/^[a-z]/{if(/^  port:/)print}' "${GF_CONFIG}" \
+  | head -1 | sed 's/.*port:[[:space:]]*//' | tr -d ' ')
+APP_PORT="${APP_PORT:-8000}"
 APP_HOST_PORT=$(grep 'hostPort:' "${GF_CONFIG}" | head -1 | sed 's/.*hostPort:[[:space:]]*//' | tr -d ' ')
 ENV_FILE=$(_get env_file)
 ENV_FILE="${ENV_FILE:-.env.dev}"
-COMPOSE_FILE=$(grep -A3 'compose:' "${GF_CONFIG}" | grep 'file:' | head -1 \
-  | sed 's/.*file:[[:space:]]*//' | tr -d '"')
+COMPOSE_FILE=$(grep -A3 'compose:' "${GF_CONFIG}" 2>/dev/null | grep 'file:' | head -1 \
+  | sed 's/.*file:[[:space:]]*//' | tr -d '"' || true)
 COMPOSE_SERVICES=$(python3 -c "
 import re
 config = open('${GF_CONFIG}').read()

@@ -11,9 +11,9 @@ GF_CONFIG="${GF_CONFIG:-${PWD}/golden-fleece.yaml}"
 source "${GF_DIR}/core/safety/guard.sh"
 gf_require_context
 
-# Parse registry port from config (default 5050)
-REGISTRY_PORT=$(grep 'port:' "${GF_CONFIG}" | grep -v '#' | tail -1 \
-  | sed 's/.*port:[[:space:]]*//' | tr -d ' ' || echo "5050")
+# Parse registry port from stacks.registry section (default 5050)
+REGISTRY_PORT=$(awk '/^  registry:/,/^  [a-z]/{if(/port:/)print}' "${GF_CONFIG}" \
+  | head -1 | sed 's/.*port:[[:space:]]*//' | tr -d ' ')
 REGISTRY_PORT="${REGISTRY_PORT:-5050}"
 REGISTRY_NAME="${GF_CLUSTER_NAME}-registry"
 
