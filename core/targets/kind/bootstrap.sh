@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# golden-fleece/core/cluster/bootstrap.sh
+# golden-fleece/core/targets/kind/bootstrap.sh
 # Idempotent Kind cluster creation from golden-fleece.yaml config.
-# Usage: bash golden-fleece/core/cluster/bootstrap.sh
+# Usage: bash golden-fleece/core/targets/kind/bootstrap.sh
 set -euo pipefail
 
-GF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+GF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 GF_CONFIG="${GF_CONFIG:-${PWD}/golden-fleece.yaml}"
 
 source "${GF_DIR}/core/safety/guard.sh"
@@ -43,7 +43,7 @@ if ports_section:
 sed \
   -e "s/{{GF_CLUSTER_NAME}}/${GF_CLUSTER_NAME}/g" \
   -e "s/{{GF_PORT_MAPPINGS}}/${PORT_MAPPINGS}/g" \
-  "${GF_DIR}/core/cluster/kind-config.yaml.tmpl" > "${GENERATED_CONFIG}"
+  "${GF_DIR}/core/targets/kind/kind-config.yaml.tmpl" > "${GENERATED_CONFIG}"
 
 # ── Create cluster if needed ────────────────────────────────────────
 

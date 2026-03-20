@@ -1,0 +1,19 @@
+# golden-fleece/core/targets/kind/kind-config.yaml.tmpl
+# Rendered by bootstrap.sh — do not edit the generated version directly.
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: {{GF_CLUSTER_NAME}}
+containerdConfigPatches:
+  - |-
+    [plugins."io.containerd.grpc.v1.cri".registry]
+      config_path = "/etc/containerd/certs.d"
+nodes:
+  - role: control-plane
+    kubeadmConfigPatches:
+      - |
+        kind: InitConfiguration
+        nodeRegistration:
+          kubeletExtraArgs:
+            node-labels: "ingress-ready=true"
+    extraPortMappings:
+{{GF_PORT_MAPPINGS}}

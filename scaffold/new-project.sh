@@ -24,29 +24,51 @@ fi
 # ── Parse config values ─────────────────────────────────────────────
 
 _get() {
-  grep "^  ${1}:" "${GF_CONFIG}" | head -1 | sed "s/.*${1}:[[:space:]]*//" | tr -d '"'
+  grep "${1}:" "${GF_CONFIG}" | head -1 | sed "s/.*${1}:[[:space:]]*//" | tr -d '"' | tr -d "'"
 }
 
 PROJECT_NAME=$(_get name)
 DESCRIPTION=$(_get description)
-GF_CLUSTER_NAME="${PROJECT_NAME}-dev"
-REGISTRY_PORT=$(grep 'port:' "${GF_CONFIG}" | grep -v '#' | head -1 | sed 's/.*port:[[:space:]]*//' | tr -d ' ')
+LANGUAGE=$(_get language)
+FRAMEWORK=$(_get framework)
+
+# Cluster name: try new schema (target.cluster_name) then fall back
+GF_CLUSTER_NAME=$(_get cluster_name)
+if [ -z "${GF_CLUSTER_NAME}" ]; then
+  GF_CLUSTER_NAME="${PROJECT_NAME}-dev"
+fi
+
+# Registry port: look under stacks.registry
+REGISTRY_PORT=$(grep -A5 'registry:' "${GF_CONFIG}" | grep 'port:' | head -1 \
+  | sed 's/.*port:[[:space:]]*//' | tr -d ' ')
+REGISTRY_PORT="${REGISTRY_PORT:-5050}"
+
 APP_START_CMD=$(_get start_cmd)
 APP_HEALTH_URL=$(_get health_url)
 APP_PORT=$(_get port)
 APP_HOST_PORT=$(grep 'hostPort:' "${GF_CONFIG}" | head -1 | sed 's/.*hostPort:[[:space:]]*//' | tr -d ' ')
 ENV_FILE=$(_get env_file)
-COMPOSE_FILE=$(grep 'file:' "${GF_CONFIG}" | head -1 | sed 's/.*file:[[:space:]]*//' | tr -d '"')
+ENV_FILE="${ENV_FILE:-.env.dev}"
+COMPOSE_FILE=$(grep -A3 'compose:' "${GF_CONFIG}" | grep 'file:' | head -1 \
+  | sed 's/.*file:[[:space:]]*//' | tr -d '"')
 COMPOSE_SERVICES=$(python3 -c "
 import re
 config = open('${GF_CONFIG}').read()
-m = re.search(r'services:\s*\n((?:\s+-[^\n]+\n)+)', config)
+m = re.search(r'services:\s*\[([^\]]*)\]', config)
 if m:
-    services = re.findall(r'-\s+(\S+)', m.group(1))
-    print(' '.join(services))
+    print(m.group(1).strip())
+else:
+    m = re.search(r'services:\s*\n((?:\s+-[^\n]+\n)+)', config)
+    if m:
+        services = re.findall(r'-\s+(\S+)', m.group(1))
+        print(' '.join(services))
 " 2>/dev/null || echo "")
-HELM_CHART_DIR=$(grep 'chart_dir:' "${GF_CONFIG}" | head -1 | sed 's/.*chart_dir:[[:space:]]*//' | tr -d '"')
-HELM_VALUES_DEV=$(grep 'values_dev:' "${GF_CONFIG}" | head -1 | sed 's/.*values_dev:[[:space:]]*//' | tr -d '"')
+HELM_CHART_DIR=$(_get chart_dir)
+HELM_CHART_DIR="${HELM_CHART_DIR:-./chart}"
+HELM_VALUES_DEV=$(_get values_dev)
+HELM_VALUES_DEV="${HELM_VALUES_DEV:-chart/values-dev.yaml}"
+TEST_CMD=$(_get test_cmd)
+TEST_CMD="${TEST_CMD:-echo 'no test command configured'}"
 
 echo "==> golden-fleece scaffold"
 echo "    Project:  ${PROJECT_NAME}"
@@ -60,6 +82,8 @@ render() {
   sed \
     -e "s|{{PROJECT_NAME}}|${PROJECT_NAME}|g" \
     -e "s|{{DESCRIPTION}}|${DESCRIPTION}|g" \
+    -e "s|{{LANGUAGE}}|${LANGUAGE}|g" \
+    -e "s|{{FRAMEWORK}}|${FRAMEWORK}|g" \
     -e "s|{{GF_CLUSTER_NAME}}|${GF_CLUSTER_NAME}|g" \
     -e "s|{{REGISTRY_PORT}}|${REGISTRY_PORT}|g" \
     -e "s|{{APP_START_CMD}}|${APP_START_CMD}|g" \
@@ -71,6 +95,7 @@ render() {
     -e "s|{{COMPOSE_SERVICES}}|${COMPOSE_SERVICES}|g" \
     -e "s|{{HELM_CHART_DIR}}|${HELM_CHART_DIR}|g" \
     -e "s|{{HELM_VALUES_DEV}}|${HELM_VALUES_DEV}|g" \
+    -e "s|{{TEST_CMD}}|${TEST_CMD}|g" \
     -e "s|{{CLUSTER_NAME}}|${GF_CLUSTER_NAME}|g" \
     "${src}" > "${dst}"
   echo "  wrote: ${dst}"

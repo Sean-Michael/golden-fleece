@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# golden-fleece/core/registry/setup.sh
+# golden-fleece/core/stacks/registry/kind/setup.sh
 # Idempotent local registry setup for any Kind cluster.
 # Reads cluster name + registry port from golden-fleece.yaml.
-# Usage: bash golden-fleece/core/registry/setup.sh
+# Usage: bash golden-fleece/core/stacks/registry/kind/setup.sh
 set -euo pipefail
 
-GF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+GF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
 GF_CONFIG="${GF_CONFIG:-${PWD}/golden-fleece.yaml}"
 
 source "${GF_DIR}/core/safety/guard.sh"

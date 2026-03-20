@@ -1,0 +1,69 @@
+# golden-fleece.yaml — project configuration for the golden-fleece harness
+# Copy this to your project root and fill in the values.
+# Run: bash golden-fleece/scaffold/new-project.sh to scaffold everything from this config.
+
+project:
+  name: "{{PROJECT_NAME}}"          # used for cluster name, image name, namespace
+  description: "{{DESCRIPTION}}"
+  language: "{{LANGUAGE}}"           # python | go | node | java | other
+  framework: "{{FRAMEWORK}}"        # fastapi | gin | express | spring | other
+
+target:
+  type: kind                        # kind | k3d | existing
+  # For kind/k3d — golden-fleece manages the cluster lifecycle
+  cluster_name: "{{PROJECT_NAME}}-dev"  # defaults to <project.name>-dev
+  ports:
+    - containerPort: 30800          # your app NodePort
+      hostPort: 8080
+      protocol: TCP
+  # For existing — point at a context you already have
+  # context: "my-dev-cluster"
+  # namespace: "my-app-dev"         # golden-fleece only operates in this namespace
+
+stacks:
+  registry:
+    enabled: true
+    type: kind                      # kind (local Docker registry) | external
+    port: 5050                      # localhost port for local registry
+    # For external:
+    # url: "harbor.company.com"
+    # secret: "harbor-pull-secret"
+
+  observability:
+    enabled: true
+    type: lgtm                      # lgtm (install full stack) | external
+    # For external:
+    # grafana_url: "http://grafana.company.com"
+    # loki_url: "http://loki.company.com"
+    # prometheus_url: "http://prometheus.company.com"
+    # otlp_endpoint: "http://alloy.company.com:4318"
+
+  gitops:
+    enabled: true
+    type: argocd                    # argocd (install) | external
+    # For external:
+    # url: "https://argocd.company.com"
+    # project: "default"
+
+  # Optional stacks
+  cert-manager: false
+  external-secrets: false
+  argo-workflows: false             # only if your app needs workflow orchestration
+
+app:
+  # How golden-fleece runs your app in dev mode (on host, hot-reload)
+  start_cmd: "{{APP_START_CMD}}"    # e.g. "uv run fastapi dev app/main.py --port 8000"
+  health_url: "{{APP_HEALTH_URL}}"  # e.g. "http://localhost:8000/healthz"
+  port: {{APP_PORT}}                # e.g. 8000
+  env_file: ".env.dev"              # sourced before start_cmd
+
+  # Compose services to bring up alongside the app
+  compose:
+    file: "compose.yaml"
+    services: [db]                  # only these services, not the whole file
+
+helm:
+  chart_dir: "./chart"
+  release_name: "{{PROJECT_NAME}}"
+  namespace: "{{PROJECT_NAME}}"
+  values_dev: "chart/values-dev.yaml"
