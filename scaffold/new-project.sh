@@ -119,12 +119,45 @@ else
   render "${TEMPLATES}/Makefile.tmpl" "${PWD}/Makefile"
 fi
 
+# ── Scaffold Helm chart ────────────────────────────────────────────
+
+CHART_DST="${PWD}/${HELM_CHART_DIR}"
+HELM_TEMPLATES="${GF_DIR}/scaffold/helm/base"
+
+if [ -f "${CHART_DST}/Chart.yaml" ]; then
+  echo "==> Helm chart already exists at ${HELM_CHART_DIR} — skipping"
+else
+  echo "==> Scaffolding Helm chart at ${HELM_CHART_DIR}..."
+  mkdir -p "${CHART_DST}/templates"
+
+  render "${HELM_TEMPLATES}/Chart.yaml.tmpl" "${CHART_DST}/Chart.yaml"
+  render "${HELM_TEMPLATES}/values.yaml.tmpl" "${CHART_DST}/values.yaml"
+  render "${HELM_TEMPLATES}/values-dev.yaml.tmpl" "${CHART_DST}/values-dev.yaml"
+
+  # Template files are pure Helm Go templates — copy without rendering
+  # (they use {{ .Values.x }} syntax which would conflict with our {{VAR}} rendering)
+  for tmpl in "${HELM_TEMPLATES}/templates/"*.tmpl; do
+    [ -f "${tmpl}" ] || continue
+    dst_name=$(basename "${tmpl}" .tmpl)
+    cp "${tmpl}" "${CHART_DST}/templates/${dst_name}"
+    echo "  wrote: ${HELM_CHART_DIR}/templates/${dst_name}"
+  done
+fi
+
 # ── Scaffold AUTONOMOUS-SESSION.md ─────────────────────────────────
 
 if [ ! -f "${PWD}/AUTONOMOUS-SESSION.md" ]; then
   render "${TEMPLATES}/AUTONOMOUS-SESSION.md.tmpl" "${PWD}/AUTONOMOUS-SESSION.md"
 else
   echo "  skipped: AUTONOMOUS-SESSION.md (already exists)"
+fi
+
+# ── Scaffold AGENTS.md ────────────────────────────────────────────
+
+if [ ! -f "${PWD}/AGENTS.md" ]; then
+  render "${TEMPLATES}/AGENTS.md.tmpl" "${PWD}/AGENTS.md"
+else
+  echo "  skipped: AGENTS.md (already exists)"
 fi
 
 # ── Link the skill into CLAUDE.md ──────────────────────────────────

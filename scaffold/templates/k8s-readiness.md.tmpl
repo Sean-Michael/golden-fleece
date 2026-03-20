@@ -1,0 +1,45 @@
+# Kubernetes Readiness Report — {{PROJECT_NAME}}
+
+Generated: {{GENERATED_DATE}}
+Target: {{TARGET_TYPE}} ({{GF_CLUSTER_NAME}})
+
+## Completed
+
+- [ ] Dockerfile — multi-stage, non-root user, minimal image
+- [ ] Health endpoint — GET {{HEALTH_PATH}} → 200
+- [ ] Helm chart — production-quality, passes dry-run
+- [ ] Kubernetes probes — startup/readiness/liveness tuned
+- [ ] Resource limits — requests and limits set
+- [ ] Security context — non-root, read-only filesystem, dropped caps
+- [ ] HPA — scales 2→10 on CPU 70%
+- [ ] PDB — minAvailable: 1
+- [ ] Registry — image builds and pulls correctly
+- [ ] Metrics — flowing to Prometheus (verified with live query)
+- [ ] Logs — flowing to Loki (verified with live query)
+- [ ] Traces — flowing to Tempo (verified with live query)
+- [ ] GitOps — ArgoCD Application Healthy + Synced
+- [ ] Smoke tests — all passing
+
+## Before Production
+
+- [ ] Secrets backend — replace Opaque secret with ExternalSecret
+      (chart/templates/secret.yaml has the stub, wire to your vault)
+- [ ] Ingress — set ingress.host and configure TLS
+- [ ] IRSA — add role ARN to serviceAccount.annotations if using AWS
+- [ ] Real registry — update image.repository to your production registry
+- [ ] Alert routing — Prometheus alert rules exist, wire to PagerDuty/Slack
+- [ ] Network policies — enabled in prod values, review allowNamespaces
+- [ ] Resource tuning — current limits are conservative defaults, profile under load
+
+## Observed Metrics
+
+- Startup time: ~_s (startupProbe allows 300s)
+- Memory footprint: ~_Mi at idle
+- CPU at idle: ~_m
+
+## Generated Files
+
+- chart/                    Helm chart
+- golden-fleece.yaml        Framework config
+- .golden-fleece/           Generated artifacts (gitignored)
+- k8s-readiness.md          This file

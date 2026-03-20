@@ -1,0 +1,48 @@
+image:
+  repository: ""              # must be set at deploy time
+  tag: "latest"
+  pullPolicy: IfNotPresent
+
+app:
+  port: {{APP_PORT}}
+  healthPath: /healthz
+  replicaCount: 2             # HA by default
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+serviceAccount:
+  create: true
+  annotations: {}             # irsa: eks.amazonaws.com/role-arn: ""
+
+ingress:
+  enabled: false
+  className: ""
+  host: ""
+  tls: []
+
+observability:
+  enabled: false
+  otlpEndpoint: ""
+
+networkPolicy:
+  enabled: true
+  allowNamespaces: []
+
+env: {}
+secrets: {}

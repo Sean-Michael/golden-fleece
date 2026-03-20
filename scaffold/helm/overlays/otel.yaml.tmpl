@@ -1,0 +1,11 @@
+# OTLP overlay — adds OpenTelemetry env vars to the deployment.
+# Applied when observability is enabled in golden-fleece.yaml.
+# Merged into values-dev.yaml during scaffold.
+observability:
+  enabled: true
+  otlpEndpoint: "http://alloy.monitoring.svc.cluster.local:4318"
+
+# These env vars are injected by the deployment template when observability.enabled=true:
+#   OTEL_EXPORTER_OTLP_ENDPOINT — points to Alloy's OTLP HTTP receiver
+#   OTEL_SERVICE_NAME — set to the Helm release name
+#   OTEL_RESOURCE_ATTRIBUTES — includes deployment.environment=<namespace>

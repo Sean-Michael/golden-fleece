@@ -1,0 +1,22 @@
+# CloudNativePG overlay — stub for adding a CNPG Cluster dependency.
+# Uncomment and configure when the app needs a PostgreSQL database
+# managed by the CloudNativePG operator.
+#
+# Prerequisites:
+#   helm repo add cnpg https://cloudnative-pg.github.io/charts
+#   helm install cnpg cnpg/cloudnative-pg -n cnpg-system --create-namespace
+#
+# Then apply this as a separate manifest alongside the Helm chart:
+#
+# apiVersion: postgresql.cnpg.io/v1
+# kind: Cluster
+# metadata:
+#   name: {{PROJECT_NAME}}-db
+# spec:
+#   instances: 1
+#   storage:
+#     size: 1Gi
+#   bootstrap:
+#     initdb:
+#       database: {{PROJECT_NAME}}
+#       owner: {{PROJECT_NAME}}
