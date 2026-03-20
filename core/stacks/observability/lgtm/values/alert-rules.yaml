@@ -1,0 +1,49 @@
+# Generic golden signals alert rules
+# Uses standard OTLP metric names (http_server_request_duration_seconds)
+# These fire for any app exporting OpenTelemetry HTTP metrics.
+serverFiles:
+  alerting_rules.yml:
+    groups:
+      - name: golden-signals
+        rules:
+          - alert: HighErrorRate
+            expr: |
+              (
+                sum(rate(http_server_request_duration_seconds_count{
+                  http_response_status_code=~"5.."
+                }[5m])) by (service_name)
+                /
+                sum(rate(http_server_request_duration_seconds_count[5m])) by (service_name)
+              ) > 0.05
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "High 5xx error rate for {{ $labels.service_name }}"
+              description: ">5% server errors over the last 5 minutes."
+
+          - alert: HighLatencyP95
+            expr: |
+              histogram_quantile(0.95,
+                sum(rate(http_server_request_duration_seconds_bucket[5m])) by (le, service_name)
+              ) > 2
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "P95 latency >2s for {{ $labels.service_name }}"
+              description: "95th percentile request latency exceeds 2 seconds."
+
+          - alert: HighSaturation
+            expr: |
+              (
+                sum(container_memory_working_set_bytes{container!=""}) by (pod)
+                /
+                sum(kube_pod_container_resource_limits{resource="memory"}) by (pod)
+              ) > 0.9
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Pod {{ $labels.pod }} memory >90% of limit"
+              description: "Container is approaching its memory limit."

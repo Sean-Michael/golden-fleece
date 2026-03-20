@@ -1,0 +1,95 @@
+# Grafana — dev instance with pre-configured LGTM datasources
+adminUser: admin
+adminPassword: admin
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    memory: 256Mi
+
+persistence:
+  enabled: false
+
+service:
+  type: ClusterIP
+  port: 3000
+
+# Pre-configure all LGTM datasources
+datasources:
+  datasources.yaml:
+    apiVersion: 1
+    datasources:
+      - name: Prometheus
+        type: prometheus
+        access: proxy
+        url: http://prometheus-server.monitoring.svc.cluster.local:80
+        isDefault: true
+        editable: true
+      - name: Loki
+        type: loki
+        access: proxy
+        url: http://loki.monitoring.svc.cluster.local:3100
+        editable: true
+        jsonData:
+          derivedFields:
+            - name: TraceID
+              matcherRegex: '"trace_id":\s*"(\w+)"'
+              url: "$${__value.raw}"
+              datasourceUid: tempo
+      - name: Tempo
+        type: tempo
+        access: proxy
+        uid: tempo
+        url: http://tempo.monitoring.svc.cluster.local:3100
+        editable: true
+        jsonData:
+          tracesToLogsV2:
+            datasourceUid: loki
+            filterByTraceID: true
+          serviceMap:
+            datasourceUid: prometheus
+          nodeGraph:
+            enabled: true
+
+# Dashboard provisioning via sidecar (picks up ConfigMaps with label grafana_dashboard=1)
+sidecar:
+  dashboards:
+    enabled: true
+    label: grafana_dashboard
+    labelValue: "1"
+    folder: /var/lib/grafana/dashboards
+    folderAnnotation: grafana_dashboard_folder
+    provider:
+      foldersFromFilesStructure: false
+
+# Pre-load community dashboards
+dashboardProviders:
+  dashboardproviders.yaml:
+    apiVersion: 1
+    providers:
+      - name: default
+        orgId: 1
+        folder: ''
+        type: file
+        disableDeletion: false
+        editable: true
+        options:
+          path: /var/lib/grafana/dashboards/default
+
+dashboards:
+  default:
+    kubernetes-pods:
+      gnetId: 6417
+      revision: 1
+      datasource: Prometheus
+
+assertNoLeakedSecrets: false
+
+grafana.ini:
+  server:
+    root_url: "http://localhost:3000"
+  auth.anonymous:
+    enabled: true
+    org_role: Admin

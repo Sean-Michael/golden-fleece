@@ -1,0 +1,66 @@
+# Prometheus — lightweight dev config
+# Scrapes cluster metrics + annotation-based pod scraping
+server:
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 512Mi
+  persistentVolume:
+    enabled: false
+  retention: "2d"
+  global:
+    scrape_interval: 30s
+    evaluation_interval: 30s
+  # Enable remote write receiver so Alloy can push OTLP-converted metrics
+  extraFlags:
+    - "web.enable-remote-write-receiver"
+
+# Disable components not needed for dev
+alertmanager:
+  enabled: false
+
+kube-state-metrics:
+  enabled: true
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      memory: 128Mi
+
+prometheus-node-exporter:
+  enabled: false
+
+prometheus-pushgateway:
+  enabled: false
+
+# Annotation-based pod scraping — any pod with prometheus.io/scrape: "true"
+# gets scraped automatically. App Helm charts should set this annotation.
+extraScrapeConfigs: |
+  - job_name: 'kubernetes-pods'
+    kubernetes_sd_configs:
+      - role: pod
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+        action: keep
+        regex: true
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+        action: replace
+        target_label: __metrics_path__
+        regex: (.+)
+      - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+        action: replace
+        regex: ([^:]+)(?::\d+)?;(\d+)
+        replacement: $1:$2
+        target_label: __address__
+      - source_labels: [__meta_kubernetes_namespace]
+        action: replace
+        target_label: namespace
+      - source_labels: [__meta_kubernetes_pod_name]
+        action: replace
+        target_label: pod
+      - source_labels: [__meta_kubernetes_pod_label_app]
+        action: replace
+        target_label: app
