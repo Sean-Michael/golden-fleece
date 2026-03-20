@@ -1,0 +1,21 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: {{PROJECT_NAME}}
+  namespace: {{ARGOCD_NS}}
+spec:
+  project: {{PROJECT_NAME}}
+  source:
+    repoURL: https://kubernetes.default.svc
+    targetRevision: HEAD
+    path: {{CHART_DIR}}
+    helm:
+      valueFiles:
+        - values-dev.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: {{PROJECT_NS}}
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
