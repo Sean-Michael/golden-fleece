@@ -1,41 +1,13 @@
 {
-  "name": "golden-fleece",
+  "name": "fleece",
   "version": "0.1.0",
-  "description": "K8s adoption harness — turns Claude Code into a CKA",
+  "description": "K8s adoption harness — turn any app into a k8s-native deployment",
   "commands": [
-    {
-      "name": "fleece:adopt",
-      "description": "Full adoption flow — detect app, scaffold Helm chart, deploy, validate observability, wire GitOps",
-      "prompt_file": "commands/adopt.md"
-    },
-    {
-      "name": "fleece:up",
-      "description": "Bring up the cluster, registry, and stacks defined in golden-fleece.yaml",
-      "prompt_file": "commands/up.md"
-    },
-    {
-      "name": "fleece:smoke",
-      "description": "Run all smoke tests against the running harness",
-      "prompt_file": "commands/smoke.md"
-    },
-    {
-      "name": "fleece:status",
-      "description": "Show cluster, stack, app, and observability status at a glance",
-      "prompt_file": "commands/status.md"
-    }
+    "./.claude-plugin/commands/adopt.md",
+    "./.claude-plugin/commands/up.md",
+    "./.claude-plugin/commands/smoke.md",
+    "./.claude-plugin/commands/status.md"
   ],
-  "hooks": [
-    {
-      "event": "session_start",
-      "script": "agent/hooks/pre-session.sh",
-      "description": "Verify harness health before session begins"
-    }
-  ],
-  "skills": [
-    {
-      "file": "agent/SKILL.md",
-      "auto_load": true,
-      "trigger": "golden-fleece.yaml exists in project root"
-    }
-  ]
+  "hooks": "./hooks/hooks.json",
+  "skills": "./agent/"
 }
