@@ -7,7 +7,7 @@
   "plugins": [
     {
       "name": "golden-fleece",
-      "source": ".",
+      "source": "./",
       "description": "Full plugin — skill, commands, hooks, scaffold",
       "version": "0.1.0"
     }

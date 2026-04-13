@@ -30,6 +30,10 @@ Finally, it's helpful to know that your helm chart is setup in a way that allows
 
 ## Install
 
+I've set this up to follow the Claude plugin marketplace standards. 
+
+After cloning the repository you may open claude code and run the following commands.
+
 ```
 /plugin marketplace add Sean-Michael/golden-fleece
 /plugin install golden-fleece@golden-fleece
