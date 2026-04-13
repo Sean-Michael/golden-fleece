@@ -8,6 +8,5 @@
     "./.claude-plugin/commands/smoke.md",
     "./.claude-plugin/commands/status.md"
   ],
-  "hooks": "./hooks/hooks.json",
   "skills": "./agent/"
 }
