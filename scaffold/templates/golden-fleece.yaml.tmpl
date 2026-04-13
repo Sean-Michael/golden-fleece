@@ -6,7 +6,7 @@ project:
   name: "{{PROJECT_NAME}}"          # used for cluster name, image name, namespace
   description: "{{DESCRIPTION}}"
   language: "{{LANGUAGE}}"           # python | go | node | java | other
-  framework: "{{FRAMEWORK}}"        # fastapi | gin | express | spring | other
+  framework: "{{FRAMEWORK}}"
 
 target:
   type: kind                        # kind | k3d | existing
@@ -39,7 +39,10 @@ stacks:
     # otlp_endpoint: "http://alloy.company.com:4318"
 
   gitops:
-    enabled: true
+    # Opt-in. Enable this when the ArgoCD Application manifest is
+    # itself an artifact you want to develop — i.e. GitOps is the
+    # deployment method you're targeting in production.
+    enabled: false
     type: argocd                    # argocd (install) | external
     # For external:
     # url: "https://argocd.company.com"
@@ -48,11 +51,10 @@ stacks:
   # Optional stacks
   cert-manager: false
   external-secrets: false
-  argo-workflows: false             # only if your app needs workflow orchestration
 
 app:
   # How golden-fleece runs your app in dev mode (on host, hot-reload)
-  start_cmd: "{{APP_START_CMD}}"    # e.g. "uv run fastapi dev app/main.py --port 8000"
+  start_cmd: "{{APP_START_CMD}}"
   health_url: "{{APP_HEALTH_URL}}"  # e.g. "http://localhost:8000/healthz"
   port: {{APP_PORT}}                # e.g. 8000
   env_file: ".env.dev"              # sourced before start_cmd

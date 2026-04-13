@@ -1,14 +1,35 @@
-# /fleece:up — Bring Up the Harness
+# /fleece:up — Self-Healing Bring-Up
 
-Read `golden-fleece.yaml` and bring up everything it specifies:
+Check what's actually running, then bring up whatever is missing. Do NOT
+reflexively run `make up` — that re-does work. Inspect first, act
+surgically.
 
-1. Bootstrap the cluster target (kind/k3d/validate existing)
-2. Set up the registry (if enabled)
-3. Install observability stack (if enabled)
-4. Install GitOps stack (if enabled)
-5. Start the app (compose services + app process)
+Read `golden-fleece.yaml` for the target cluster name, enabled stacks,
+registry port, and namespace.
 
-Run: `make up`
+## Steps
 
-If any step fails, diagnose and fix before proceeding.
-After everything is up, run `make smoke` to verify.
+1. **Cluster context** — does `kind-<cluster>` exist in `kubectl config get-contexts`?
+   If missing → `GF_CONFIG=./golden-fleece.yaml bash golden-fleece/core/targets/kind/bootstrap.sh`
+
+2. **Registry container** — does `docker ps --filter name=<cluster>-registry` show a running container?
+   If missing → `GF_CONFIG=./golden-fleece.yaml bash golden-fleece/core/stacks/registry/kind/setup.sh`
+
+3. **Observability stack** (if `stacks.observability.enabled: true`) — is `deploy/grafana -n monitoring` ready?
+   If missing → `GF_CONFIG=./golden-fleece.yaml bash golden-fleece/core/stacks/observability/lgtm/install.sh`
+
+4. **GitOps stack** (if `stacks.gitops.enabled: true`) — is `deploy/argocd-server -n argocd` ready?
+   If missing → `GF_CONFIG=./golden-fleece.yaml bash golden-fleece/core/stacks/gitops/argocd/install.sh`
+
+5. **App pod** — is the Helm release installed and pods ready in the project namespace?
+   If missing or unhealthy → `make image && make helm-install`
+
+6. **Verify** — run `make smoke`. Investigate and fix anything that fails.
+
+## Notes
+
+- Each script is idempotent. Re-running a healthy one is safe but wastes time.
+- If `agent/hooks/pre-session.sh` has already been run, its status block
+  tells you exactly which of the above are `OK` vs `MISSING` — use that
+  instead of re-checking everything.
+- Do not abort on a single failure. Diagnose, fix, retry, and keep going.

@@ -1,0 +1,15 @@
+{
+  "name": "golden-fleece",
+  "description": "K8s adoption harness — turn any app into a k8s-native deployment",
+  "owner": {
+    "name": "Sean-Michael"
+  },
+  "plugins": [
+    {
+      "name": "golden-fleece",
+      "source": ".",
+      "description": "Full plugin — skill, commands, hooks, scaffold",
+      "version": "0.1.0"
+    }
+  ]
+}

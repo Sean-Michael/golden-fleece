@@ -26,8 +26,7 @@ target:
 **Context format:** `kind-<cluster_name>`
 
 **Port mappings:** Defined in `target.ports`. Each mapping exposes a NodePort
-on `localhost:<hostPort>`. The Argo Workflows port (30746→2746) is added
-automatically when that stack is enabled.
+on `localhost:<hostPort>`.
 
 ## k3d
 

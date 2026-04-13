@@ -9,224 +9,201 @@ description: >
 
 # Golden Fleece — K8s Development Skill
 
-You are operating inside a **golden-fleece** development harness. This gives
-you a fully local Kubernetes environment to develop against. You have the
-skills of a Certified Kubernetes Administrator (CKA) and should use them.
+## Mission
 
-## Environment
+Take a containerized application — `Dockerfile`, usually `compose.yaml`,
+and the source around it — and produce a Helm chart that replicates the
+runtime semantics in k8s-native ways. The workload's *shape* (stateless
+HTTP, stateful, batch, cron, event consumer, gRPC) decides the outer
+resource (Deployment, StatefulSet, Job, CronJob); compose decides the
+inner details (`environment` → ConfigMap+Secret, `volumes` → PVC,
+`healthcheck` → probes). You validate the result with live queries
+against the running cluster and write a readiness report that justifies
+every chart decision and documents the production path.
 
-Read `golden-fleece.yaml` in the project root to understand this project's
-specific configuration: target type, cluster name, enabled stacks, registry
-port, app start command, and health URL.
+The harness (local KIND cluster, local registry, LGTM observability,
+opt-in ArgoCD) exists so the chart behaves the same way in the sandbox
+as it will in production.
 
-Standard endpoints (verify against golden-fleece.yaml):
-- **App**: health URL from `app.health_url`
-- **Registry**: `localhost:<stacks.registry.port>` (push here, pods pull from `<cluster>-registry:5000`)
-- **Grafana**: port-forward `svc/grafana` in `monitoring` namespace
-- **ArgoCD**: `https://localhost:30443` (if gitops stack enabled)
-- **Alloy OTLP**: `alloy.monitoring.svc:4317` (gRPC), `:4318` (HTTP)
+For the full adopt flow, see `.claude-plugin/commands/adopt.md`.
 
 ## Safety Rules — NON-NEGOTIABLE
 
-These are hard rules, not suggestions:
-
-1. **NEVER run `kubectl` without the correct `--context`** — use the `K=`
-   variable from the Makefile which pre-pins this. In this session, `kubectl`
-   on PATH is already wrapped to enforce the right context.
-
-2. **NEVER modify `compose.yaml` or production configs** — only
+1. **NEVER run `kubectl` without the correct `--context`.** Use `${K}` from
+   the Makefile (pre-pinned) or `kubectl --context kind-<cluster>` explicitly.
+2. **NEVER modify `compose.yaml` or production configs.** Only
    `compose.dev.yaml` and `golden-fleece.yaml` are safe to edit.
-
 3. **NEVER `git push` or `git commit`** in an autonomous session unless
    explicitly instructed.
-
-4. **NEVER target a cloud cluster** — if you see `eks`, `gke`, `aks`, or
+4. **NEVER target a cloud cluster.** If you see `eks`, `gke`, `aks`, or
    `amazonaws` in a cluster URL, stop immediately and report it.
-
 5. **NEVER deploy to namespaces other than the project's namespace** (and
    `monitoring`, `argocd` for stack operations).
 
-## The Adopt Flow
+## Self-Healing Principle
 
-When running `/fleece:adopt`, follow these phases in order:
+If a dependency isn't running, **bring it up**. Don't fail and tell the
+human to run `make up`. Read `agent/hooks/pre-session.sh` output to see
+what's missing, then call the right script:
 
-### Phase 0: Questions (3 max)
-Ask:
-1. Deployment target — local KIND (default) / k3d / existing cluster?
-2. Stacks — install observability + GitOps? Or point at existing?
-3. Anything special? (unusual port, health endpoint, etc.)
+- Missing cluster → `core/targets/kind/bootstrap.sh`
+- Missing registry → `core/stacks/registry/kind/setup.sh`
+- Missing observability (if enabled) → `core/stacks/observability/lgtm/install.sh`
+- Missing gitops (if enabled) → `core/stacks/gitops/argocd/install.sh`
+- App not deployed → `make image && make helm-install`
 
-### Phase 1: App Detection
-Read the repo and produce a detection report:
-```yaml
-detected:
-  port: <from Dockerfile EXPOSE or framework config>
-  health_path: <from route definitions or framework defaults>
-  health_type: http | grpc | exec
-  startup_time_s: <estimated from framework + app size>
-  stateful: false
-  dependencies: [postgres, redis, ...]
-  env_vars:
-    required: [DATABASE_URL, SECRET_KEY]
-    optional: [LOG_LEVEL, DEBUG]
-  otel_instrumented: false
-  dockerfile: exists | generated
-```
+Diagnose root causes; don't hack around issues. Only escalate after you
+have investigated and tried the obvious fixes.
 
-Sources to check: `Dockerfile`, `requirements.txt`/`go.mod`/`package.json`,
-framework config, `docker-compose.yaml`, `.env.example`.
+## Workload Classification
 
-If missing: generate Dockerfile, add `/healthz` route, create `.env.example`.
+Before scaffolding or shaping the chart, decide which class this app fits.
+This drives every downstream choice.
 
-Write findings to `.golden-fleece/detection.yaml`.
+| Class             | Indicators                                           | Include                                                   | Exclude                                          |
+|-------------------|------------------------------------------------------|-----------------------------------------------------------|--------------------------------------------------|
+| `stateless-http`  | HTTP routes, no disk, horizontal scaling ok          | Deployment, Service, HPA, PDB, HTTP probes, Ingress       | PVC, StatefulSet, ordered rollout                |
+| `stateless-grpc`  | gRPC server (`grpc.Server`, protobuf), no disk       | Deployment, Service, **gRPC** probes, headless Service    | HTTP Ingress (use grpc-ingress), HTTP probes     |
+| `stateful`        | Writes to disk, needs stable identity (DB, broker)   | StatefulSet, volumeClaimTemplate, headless Service, PDB   | HPA, rolling replace                             |
+| `batch-job`       | Runs once, exits (ETL, migration, one-shot)          | Job, Never restart, backoffLimit, optional TTL            | Service, Ingress, HPA, PDB, readiness probe     |
+| `scheduled`       | Cron-like, periodic execution                        | CronJob, concurrencyPolicy, history limits                | Service, Ingress, HPA, PDB, readiness probe     |
+| `event-consumer`  | Reads queue/stream (Kafka, SQS, NATS), no HTTP       | Deployment, KEDA ScaledObject, no Service                 | Ingress, HPA (use KEDA), readiness probe         |
+| `no-ingress`      | Internal-only side-car, utility, scheduled trigger   | Deployment or CronJob, ClusterIP-only or no Service       | Ingress, NetworkPolicy ingress rules             |
 
-### Phase 2: Config Generation
-Generate `golden-fleece.yaml` from detection + Phase 0 answers.
-Show it to the user, wait for confirmation.
+When in doubt between classes, prefer the simpler one (`stateless-http`
+for HTTP APIs is the usual default). Record your choice and reasoning in
+`.golden-fleece/detection.yaml` and again in `k8s-readiness.md`.
 
-### Phase 3: Scaffold
-```bash
-bash golden-fleece/scaffold/new-project.sh
-```
-Generates: Helm chart, Makefile, AUTONOMOUS-SESSION.md, AGENTS.md.
+## Compose → K8s Mapping
 
-### Phase 4: Cluster + Stacks
-```bash
-make kind-up
-```
-Monitors each step, fixes failures before proceeding.
+When `compose.yaml` exists, treat it as the source of truth for the
+app's runtime semantics. The workload class decides the outer resource
+shape; compose decides the inner details.
 
-### Phase 5: First Deploy
-```bash
-make image
-make helm-install
-```
-Watch pods and actively fix issues:
-- Probe failures → adjust `initialDelaySeconds` or `failureThreshold`
-- Image pull errors → debug registry trust config
-- CrashLoopBackOff → check logs for missing env var
-- OOMKilled → increase memory limit
+| Compose                         | K8s                                                              |
+|---------------------------------|------------------------------------------------------------------|
+| `services.<name>.image`         | `spec.template.spec.containers[].image`                          |
+| `services.<name>.environment`   | ConfigMap (non-secrets) + Secret (credentials, tokens, keys)     |
+| `services.<name>.ports`         | `Service` (ClusterIP) + optional `Ingress`                       |
+| `services.<name>.volumes`       | PVC + `volumeMounts`; host binds become `emptyDir` or ConfigMaps |
+| `services.<name>.healthcheck`   | `livenessProbe` / `readinessProbe` (use `httpGet` or `exec`)     |
+| `services.<name>.depends_on`    | Readiness probe that retries the connection; an initContainer probe is a wait, not the dep itself |
+| `services.<name>.restart`       | `restartPolicy` (Always for Deployment, Never/OnFailure for Job) |
+| `services.<name>.deploy.resources` | `resources.requests` / `resources.limits`                     |
+| `services.<name>.command`       | `spec.template.spec.containers[].command` / `args`               |
+| `networks`                      | Usually nothing — pods share a flat network inside a namespace   |
 
-Iterate until pod is `1/1 Running`.
+Secrets split: anything that looks like a credential (`*_PASSWORD`,
+`*_SECRET`, `*_TOKEN`, `*_KEY`, `DATABASE_URL` with a password) goes
+into a `Secret`. Everything else goes into the `ConfigMap`.
 
-### Phase 6: Observability Validation
-Validate each signal with live queries (see Observability Validation below).
-If OTLP isn't wired, add the SDK, rebuild, redeploy, re-query.
+## Dependencies
 
-### Phase 7: GitOps Validation
-ArgoCD is installed but the Application is only created when a git remote
-exists (`git remote get-url origin`). For local dev without a remote:
-- Phase 5 already deployed via `helm install` — the app is running.
-- ArgoCD validates the chart is GitOps-compatible (project + RBAC exist).
-- Skip the sync step; note in the readiness report that ArgoCD sync is
-  pending a real git remote.
+Compose services that aren't the app — postgres, redis, a model
+server — are real workloads, not parts of the app's chart. Bring each
+up as its own sibling release (upstream chart, operator, or an
+`ExternalName` pointing at something already running), wire the
+connection into the app via ConfigMap/Secret env vars, and never
+hard-code a dep hostname in the chart templates.
 
-If a git remote IS available:
-```bash
-argocd app get <project>
-argocd app sync <project>
-argocd app wait <project> --health --timeout 120
-```
+Do this only when compose makes it obvious *or* the user asks for it.
+When in doubt, stop and ask rather than spinning up infrastructure
+the user didn't request.
 
-### Phase 8: Smoke Test
-```bash
-make smoke
-```
+The readiness report records, for each dep, what ran in dev and what
+should run in prod (managed service, operator with production sizing,
+shared cluster instance) — that decision is the point.
 
-### Phase 9: Readiness Report
-Generate `k8s-readiness.md` from the template with observed values.
+## Environment
+
+Read `golden-fleece.yaml` for project-specific config: target type,
+cluster name, enabled stacks, registry port, app start command, health URL.
+
+Standard endpoints (verify against config):
+- **App**: health URL from `app.health_url`
+- **Registry**: `localhost:<stacks.registry.port>` (push here; pods pull from `<cluster>-registry:5000`)
+- **Grafana**: port-forward `svc/grafana -n monitoring`
+- **ArgoCD**: `https://localhost:30443` (if gitops enabled)
+- **Alloy OTLP**: `alloy.monitoring.svc:4317` gRPC / `:4318` HTTP
 
 ## Development Loop
 
-The standard iteration cycle:
-
 ```
-1. Edit source code
-   ↓
-2. Verify app is healthy (curl <health_url>)
-   ↓  (if broken: check logs, fix, repeat)
-3. make image          ← build + push to local registry
-   ↓
-4. make helm-install   ← Helm upgrade into Kind cluster
-   ↓
-5. Verify pod is running and healthy
-   kubectl get pods -n <namespace>
-   kubectl logs -n <namespace> -l app=<name> --tail=50
-   ↓
-6. Test the feature end-to-end
-   ↓
-7. make smoke          ← verify nothing regressed
-   ↓
-8. Repeat
+1. Edit code
+2. Verify app healthy on host    (curl ${APP_HEALTH_URL})
+3. make image                    (build + push to local registry)
+4. make helm-install              (Helm upgrade into Kind)
+5. Verify pod running              ($K get pods -n <ns>; $K logs ... --tail=50)
+6. Test feature end-to-end
+7. make smoke                    (verify nothing regressed)
 ```
 
-For pure app development (not testing k8s behavior), steps 3-5 can be
-skipped — the app runs on host with hot-reload.
+For pure app work (no k8s behavior changes), steps 3–5 can be skipped —
+the app runs on host with hot-reload.
 
 ## Observability Validation
 
-Do NOT declare observability working until these queries return data:
+Do NOT declare observability working until these queries return data.
 
-### Metrics — verify app metrics are in Prometheus
+**Metrics — Prometheus:**
 ```bash
-kubectl exec -n monitoring deploy/grafana -- \
+${K} exec -n monitoring deploy/grafana -- \
   curl -sG "http://prometheus-server/api/v1/query" \
   --data-urlencode "query=up{job=\"<project-name>\"}" | jq '.data.result'
 ```
 
-### Logs — verify app logs are in Loki
+**Logs — Loki** (use `query_range`, not `query` — instant queries don't work for logs):
 ```bash
-kubectl exec -n monitoring deploy/grafana -- \
-  curl -sG "http://loki:3100/loki/api/v1/query" \
-  --data-urlencode 'query={app="<project-name>"}' | jq '.data.result[0]'
+${K} exec -n monitoring deploy/grafana -- \
+  curl -sG "http://loki:3100/loki/api/v1/query_range" \
+  --data-urlencode 'query={namespace="<project-name>"}' | jq '.data.result[0]'
 ```
 
-### Traces — verify traces are in Tempo
+**Traces — Tempo:**
 ```bash
-kubectl exec -n monitoring deploy/grafana -- \
+${K} exec -n monitoring deploy/grafana -- \
   curl -s "http://tempo:3100/api/search?tags=service.name%3D<project-name>" \
   | jq '.traces[0]'
 ```
 
-If any of these return empty results, the pipeline is not working.
-Debug the specific segment (app → Alloy → backend).
+If any return empty, the pipeline is broken. Debug the specific segment
+(app → Alloy → backend). If OTLP isn't wired in the app, add the SDK,
+rebuild, redeploy, re-query.
 
-## Helm Chart Standards
+## Helm Chart Standards (Default Shape)
 
-Every generated chart follows these standards:
+The scaffold generates a chart tuned for `stateless-http`. You will
+**edit it to match the workload class** — that's the point. Default shape:
+
 - **Three probes**: startup (allows 5min), readiness (5s period), liveness (10s period)
 - **Security context**: non-root (UID 1000), read-only rootfs, dropped ALL caps
-- **Resources**: requests AND limits on both CPU and memory
-- **HPA**: 2→10 replicas on CPU 70% (production), disabled locally
-- **PDB**: minAvailable 1 (production), disabled locally
-- **NetworkPolicy**: enabled in production, disabled locally
-- **Secrets**: ExternalSecret stub in production, Opaque for dev
-- **OTLP**: env vars injected when observability enabled
+- **Resources**: requests AND limits on CPU + memory
+- **HPA**: 2→10 replicas on CPU 70% (prod), disabled locally
+- **PDB**: minAvailable 1 (prod), disabled locally
+- **NetworkPolicy**: enabled in prod, disabled locally
+- **OTLP env vars**: injected when observability enabled
+- **Secrets**: ExternalSecret stub in prod, Opaque for dev
 
-When editing the chart, always verify:
+When editing the chart, always verify before applying:
 ```bash
-helm template <name> ./chart -f chart/values-dev.yaml | kubectl apply --dry-run=client -f -
+helm template <name> ./chart -f chart/values-dev.yaml \
+  | ${K} apply --dry-run=client -f -
 ```
 
-## Image and Registry
+## GitOps as an Artifact (opt-in)
 
-- Push to: `localhost:<port>/<project>:dev`
-- Pods pull from: `<cluster>-registry:5000/<project>:dev`
-- `imagePullPolicy: Always` in `values-dev.yaml` ensures pods pick up new pushes
+GitOps is off by default. Enable `stacks.gitops.enabled: true` in
+`golden-fleece.yaml` only when the ArgoCD `Application` manifest is
+itself a deliverable you want to develop — i.e. GitOps *is* the
+deployment method you're targeting in production.
 
-Quick image cycle:
-```bash
-make image
-kubectl -n <namespace> rollout restart deployment/<name>
-kubectl -n <namespace> rollout status deployment/<name>
-```
+When enabled, treat the ArgoCD `Application` as a shaped artifact, not
+just a thing the install script creates. Tune `syncPolicy`,
+`retry.backoff`, `prune`, `selfHeal`, and `ignoreDifferences` to match
+how the app actually behaves. Record the decisions in the readiness
+report alongside the chart decisions.
 
-## When Stuck
-
-Write your concern to `NOTES.md`:
-- What you were trying to do
-- What went wrong
-- What options you see
-
-Then stop and wait for review. Do not hack around architectural issues.
-Do not guess at cluster state — use `kubectl` to observe it directly.
+When disabled (the default), the readiness report still documents the
+**path to GitOps**: which values are safe to commit, where secrets
+come from at sync time, what the `Application` spec would look like
+for a production ArgoCD.

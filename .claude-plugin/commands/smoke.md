@@ -1,16 +1,16 @@
 # /fleece:smoke — Run Smoke Tests
 
-Run the full smoke test suite against the running harness:
-
 ```bash
 make smoke
 ```
 
-This runs all checks in `golden-fleece/core/smoke/checks/`:
-- **app-health** — health endpoint returns 200
-- **registry** — registry is reachable
-- **observability** — Prometheus, Loki, Tempo, Grafana, Alloy running + data queries
-- **gitops** — ArgoCD server running
+Runs every check in `golden-fleece/core/smoke/checks/`. Each check
+reads `golden-fleece.yaml` and skips cleanly if its stack is disabled.
 
-If any check fails, investigate and fix the issue.
-Report the results clearly — what passed, what failed, what to do about failures.
+- **app-health** — health endpoint returns 200
+- **registry** — local registry responds on `/v2/`
+- **observability** — Prometheus / Loki / Tempo / Grafana / Alloy running and returning data (skipped if `stacks.observability.enabled: false`)
+- **gitops** — ArgoCD server + AppProject + Application healthy (skipped if `stacks.gitops.enabled: false`)
+
+Investigate and fix any failures. Smoke checks are read-only — a
+failure is a real problem, not a flake.

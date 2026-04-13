@@ -4,7 +4,7 @@
 # Usage: bash golden-fleece/scaffold/new-project.sh
 #
 # Reads golden-fleece.yaml from the project root (must exist).
-# Generates: Makefile targets, CLAUDE.md additions, AGENTS.md, AUTONOMOUS-SESSION.md
+# Generates: Makefile, Helm chart at chart/, and .golden-fleece/ directory.
 set -euo pipefail
 
 GF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -14,10 +14,11 @@ TEMPLATES="${GF_DIR}/scaffold/templates"
 if [ ! -f "${GF_CONFIG}" ]; then
   echo "ERROR: golden-fleece.yaml not found at ${GF_CONFIG}"
   echo ""
-  echo "Copy the template first:"
-  echo "  cp golden-fleece/scaffold/templates/golden-fleece.yaml.tmpl golden-fleece.yaml"
-  echo "  # edit golden-fleece.yaml with your project values"
-  echo "  # then re-run this script"
+  echo "Run /fleece:adopt in a Claude Code session — the agent will"
+  echo "detect the app, classify the workload, and generate this file."
+  echo ""
+  echo "Or hand-write one; see scaffold/templates/golden-fleece.yaml.tmpl"
+  echo "for the schema."
   exit 1
 fi
 
@@ -147,46 +148,6 @@ else
   done
 fi
 
-# ── Scaffold AUTONOMOUS-SESSION.md ─────────────────────────────────
-
-if [ ! -f "${PWD}/AUTONOMOUS-SESSION.md" ]; then
-  render "${TEMPLATES}/AUTONOMOUS-SESSION.md.tmpl" "${PWD}/AUTONOMOUS-SESSION.md"
-else
-  echo "  skipped: AUTONOMOUS-SESSION.md (already exists)"
-fi
-
-# ── Scaffold AGENTS.md ────────────────────────────────────────────
-
-if [ ! -f "${PWD}/AGENTS.md" ]; then
-  render "${TEMPLATES}/AGENTS.md.tmpl" "${PWD}/AGENTS.md"
-else
-  echo "  skipped: AGENTS.md (already exists)"
-fi
-
-# ── Link the skill into CLAUDE.md ──────────────────────────────────
-
-SKILL_REF="Read golden-fleece/agent/SKILL.md before any kubectl, helm, image build, or k8s task."
-
-if [ -f "${PWD}/CLAUDE.md" ]; then
-  if ! grep -q "golden-fleece" "${PWD}/CLAUDE.md"; then
-    echo "" >> "${PWD}/CLAUDE.md"
-    echo "## golden-fleece K8s Harness" >> "${PWD}/CLAUDE.md"
-    echo "" >> "${PWD}/CLAUDE.md"
-    echo "${SKILL_REF}" >> "${PWD}/CLAUDE.md"
-    echo "  updated: CLAUDE.md"
-  else
-    echo "  skipped: CLAUDE.md (already references golden-fleece)"
-  fi
-fi
-
-# ── Create hack/ directory structure ───────────────────────────────
-
-mkdir -p "${PWD}/hack/argo-templates"
-if [ ! -f "${PWD}/hack/argo-templates/.gitkeep" ]; then
-  touch "${PWD}/hack/argo-templates/.gitkeep"
-  echo "  created: hack/argo-templates/ (place WorkflowTemplates here)"
-fi
-
 # ── Create .golden-fleece/ (generated artifacts, gitignored) ───────
 
 mkdir -p "${PWD}/.golden-fleece"
@@ -200,7 +161,5 @@ echo ""
 echo "✓ golden-fleece scaffolded for '${PROJECT_NAME}'"
 echo ""
 echo "Next steps:"
-echo "  1. Edit AUTONOMOUS-SESSION.md — describe what Claude should build"
-echo "  2. make up     — bring up the cluster and app"
-echo "  3. make smoke  — verify the harness is healthy"
-echo "  4. make session — get the autonomous session prompt"
+echo "  In a Claude Code session, run: /fleece:adopt"
+echo "  (or: /fleece:up to bring up the harness, then iterate on the app)"

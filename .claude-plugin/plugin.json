@@ -22,11 +22,6 @@
       "name": "fleece:status",
       "description": "Show cluster, stack, app, and observability status at a glance",
       "prompt_file": "commands/status.md"
-    },
-    {
-      "name": "fleece:session",
-      "description": "Print the autonomous session prompt for this project",
-      "prompt_file": "commands/session.md"
     }
   ],
   "hooks": [

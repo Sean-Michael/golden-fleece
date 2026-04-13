@@ -5,7 +5,6 @@
 #   make up      # bring up everything
 #   make smoke   # end-to-end smoke test
 #   make down    # tear down everything
-#   make session # print the autonomous Claude Code session prompt
 #
 # K8s targets (Helm deploy path):
 #   make registry      # start local container registry
@@ -17,7 +16,7 @@
 .PHONY: up down destroy kind-up kind-down registry image \
         helm-install helm-uninstall helm-status \
         observability gitops \
-        smoke test session logs
+        smoke test logs
 
 # ── Config ─────────────────────────────────────────────────────────
 SHELL         := /bin/bash
@@ -39,7 +38,6 @@ up: kind-up app-start
 	@echo "  App:  {{APP_HEALTH_URL}}"
 	@echo ""
 	@echo "Run 'make smoke' to verify everything works."
-	@echo "Run 'make session' to get the autonomous session prompt."
 
 down: app-stop kind-down
 	@echo "Dev harness is down"
@@ -57,8 +55,6 @@ kind-up: registry
 		GF_CONFIG=$(GF_CONFIG) bash $(GF_DIR)/core/stacks/observability/lgtm/install.sh || true
 	@grep -A5 'gitops:' $(GF_CONFIG) 2>/dev/null | grep -q 'enabled:.*true' && \
 		GF_CONFIG=$(GF_CONFIG) bash $(GF_DIR)/core/stacks/gitops/argocd/install.sh || true
-	@grep -qE 'argo-workflows:\s*true' $(GF_CONFIG) 2>/dev/null && \
-		GF_CONFIG=$(GF_CONFIG) bash $(GF_DIR)/core/stacks/argo-workflows/install.sh || true
 
 kind-down:
 	@if kind get clusters 2>/dev/null | grep -qw $(KIND_CLUSTER); then \
@@ -156,14 +152,3 @@ helm-status:
 	@echo ""
 	$(K) -n {{PROJECT_NAME}} get pods
 
-# ── Agent ──────────────────────────────────────────────────────────
-
-session:
-	@echo ""
-	@echo "════════════════════════════════════════════════════════"
-	@echo "  Autonomous Claude Code Session Prompt"
-	@echo "  Copy everything below and use as your initial prompt:"
-	@echo "════════════════════════════════════════════════════════"
-	@echo ""
-	@cat AUTONOMOUS-SESSION.md
-	@echo ""

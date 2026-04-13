@@ -29,12 +29,6 @@ config = open(config_path).read()
 # Parse port mappings from target.ports
 port_lines = []
 
-# Check for argo-workflows
-if re.search(r'argo-workflows:\s*true', config):
-    port_lines.append("      - containerPort: 30746")
-    port_lines.append("        hostPort: 2746")
-    port_lines.append("        protocol: TCP")
-
 # Parse target.ports section
 ports_match = re.search(r'^  ports:\s*\n((?:\s+-.*\n|\s+\w+.*\n)*)', config, re.MULTILINE)
 if ports_match:
